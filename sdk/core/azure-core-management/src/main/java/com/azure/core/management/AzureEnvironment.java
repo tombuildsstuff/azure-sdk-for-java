@@ -3,6 +3,8 @@
 
 package com.azure.core.management;
 
+import com.azure.core.models.CloudEnvironment;
+
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -112,6 +114,45 @@ public final class AzureEnvironment {
      */
     public Map<String, String> getEndpoints() {
         return endpoints;
+    }
+
+    /**
+     * Resolves the environment described by the process environment, so that a cloud can be
+     * selected by configuration rather than in application source.
+     *
+     * <p>{@code AZURE_CLOUD} is the activation switch. When it names a built-in cloud that cloud is
+     * returned; when it is {@code custom}, {@code AZURE_RESOURCE_MANAGER_ENDPOINT} and
+     * {@code AZURE_RESOURCE_MANAGER_AUDIENCE} describe the environment and are required alongside
+     * {@code AZURE_AUTHORITY_HOST}.</p>
+     *
+     * @return the environment described by the process environment, or {@code null} when
+     * {@code AZURE_CLOUD} is not set.
+     * @throws IllegalArgumentException when {@code AZURE_CLOUD} names an unrecognized cloud, or is
+     * {@code custom} and the required variables are missing or malformed.
+     */
+    public static AzureEnvironment fromEnvironment() {
+        CloudEnvironment cloud = CloudEnvironment.fromEnvironment();
+        if (cloud == null) {
+            return null;
+        }
+
+        switch (cloud.getName()) {
+            case CloudEnvironment.AZURE_CLOUD_NAME:
+                return AZURE;
+
+            case CloudEnvironment.AZURE_US_GOVERNMENT_NAME:
+                return AZURE_US_GOVERNMENT;
+
+            case CloudEnvironment.AZURE_CHINA_NAME:
+                return AZURE_CHINA;
+
+            default:
+                Map<String, String> endpoints = new HashMap<>();
+                endpoints.put(Endpoint.RESOURCE_MANAGER.identifier(), cloud.getResourceManagerEndpoint());
+                endpoints.put(Endpoint.MANAGEMENT.identifier(), cloud.getResourceManagerAudience());
+                endpoints.put(Endpoint.ACTIVE_DIRECTORY.identifier(), cloud.getAuthorityHost());
+                return new AzureEnvironment(endpoints);
+        }
     }
 
     /**

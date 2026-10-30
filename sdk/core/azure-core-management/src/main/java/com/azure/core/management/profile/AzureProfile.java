@@ -29,6 +29,25 @@ public final class AzureProfile {
     }
 
     /**
+     * Creates an AzureProfile from the process environment, so that an application needs no cloud
+     * configuration in source.
+     *
+     * <p>The cloud comes from {@code AZURE_CLOUD}, falling back to
+     * {@link AzureEnvironment#AZURE Azure Public} when it is not set. The tenant ID and
+     * subscription ID come from {@code AZURE_TENANT_ID} and {@code AZURE_SUBSCRIPTION_ID}.</p>
+     *
+     * @throws IllegalArgumentException when {@code AZURE_CLOUD} names an unrecognized cloud, or is
+     * {@code custom} and the required endpoint variables are missing or malformed.
+     */
+    public AzureProfile() {
+        AzureEnvironment resolved = AzureEnvironment.fromEnvironment();
+        this.environment = resolved == null ? AzureEnvironment.AZURE : resolved;
+        Configuration configuration = Configuration.getGlobalConfiguration();
+        this.tenantId = configuration.get(Configuration.PROPERTY_AZURE_TENANT_ID);
+        this.subscriptionId = configuration.get(Configuration.PROPERTY_AZURE_SUBSCRIPTION_ID);
+    }
+
+    /**
      * Creates AzureProfile instance with specific Azure cloud. The global cloud is {@link AzureCloud#AZURE_PUBLIC_CLOUD}.
      * The tenant ID and subscription ID can be set via environment variables. The environment variables are expected
      * as below:

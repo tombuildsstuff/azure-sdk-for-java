@@ -68,6 +68,12 @@ public final class AzureIdentityEnvVars extends ExpandableStringEnum<AzureIdenti
     public static final AzureIdentityEnvVars AZURE_TOKEN_CREDENTIALS = fromString("AZURE_TOKEN_CREDENTIALS");
 
     /**
+     * The environment variable disabling instance discovery for every credential type.
+     */
+    public static final AzureIdentityEnvVars AZURE_DISABLE_INSTANCE_DISCOVERY
+        = fromString("AZURE_DISABLE_INSTANCE_DISCOVERY");
+
+    /**
      * The Azure client send certificate chain environment variable.
      */
     public static final AzureIdentityEnvVars AZURE_CLIENT_SEND_CERTIFICATE_CHAIN

@@ -10,6 +10,7 @@ import com.azure.core.http.policy.HttpLogOptions;
 import com.azure.core.http.policy.HttpPipelinePolicy;
 import com.azure.core.http.policy.RetryOptions;
 import com.azure.core.http.policy.RetryPolicy;
+import com.azure.core.models.CloudEnvironment;
 import com.azure.core.util.ClientOptions;
 import com.azure.core.util.Configuration;
 import com.azure.core.util.logging.ClientLogger;
@@ -17,6 +18,7 @@ import com.azure.identity.AuthenticationRecord;
 import com.azure.identity.AzureAuthorityHosts;
 import com.azure.identity.BrowserCustomizationOptions;
 import com.azure.identity.ChainedTokenCredential;
+import com.azure.identity.AzureIdentityEnvVars;
 import com.azure.identity.TokenCachePersistenceOptions;
 import com.azure.identity.implementation.util.IdentityConstants;
 import com.azure.identity.implementation.util.ValidationUtil;
@@ -101,7 +103,9 @@ public final class IdentityClientOptions implements Cloneable {
         additionallyAllowedTenants = new HashSet<>();
         regionalAuthority
             = RegionalAuthority.fromString(configuration.get(Configuration.PROPERTY_AZURE_REGIONAL_AUTHORITY_NAME));
-        instanceDiscovery = true;
+        // instanceDiscovery is deliberately not defaulted here: loadFromConfiguration() above
+        // already resolved it from AZURE_DISABLE_INSTANCE_DISCOVERY, and assigning true at this
+        // point would silently discard that.
     }
 
     private static Function<Duration, Duration> getIMDSretryTimeoutFunction() {
@@ -700,8 +704,17 @@ public final class IdentityClientOptions implements Cloneable {
      * Loads the details from the specified Configuration Store.
      */
     private void loadFromConfiguration(Configuration configuration) {
-        authorityHost
-            = configuration.get(Configuration.PROPERTY_AZURE_AUTHORITY_HOST, AzureAuthorityHosts.AZURE_PUBLIC_CLOUD);
+        // AZURE_CLOUD describes the whole cloud and so takes precedence over the authority-only
+        // AZURE_AUTHORITY_HOST. When it is unset, the pre-existing AZURE_AUTHORITY_HOST behaviour
+        // is preserved exactly.
+        CloudEnvironment cloud = CloudEnvironment.fromConfiguration(configuration);
+        if (cloud != null) {
+            authorityHost = cloud.getAuthorityHost();
+        } else {
+            authorityHost = configuration.get(Configuration.PROPERTY_AZURE_AUTHORITY_HOST,
+                AzureAuthorityHosts.AZURE_PUBLIC_CLOUD);
+        }
+        instanceDiscovery = resolveInstanceDiscovery(configuration);
         imdsAuthorityHost
             = configuration.get(AZURE_POD_IDENTITY_AUTHORITY_HOST, IdentityConstants.DEFAULT_IMDS_ENDPOINT);
         dacEnvConfiguredCredential = configuration.get(AZURE_TOKEN_CREDENTIALS);
@@ -889,4 +902,27 @@ public final class IdentityClientOptions implements Cloneable {
         }
         return clone;
     }
+
+    /**
+     * Resolves whether instance discovery should be performed. Precedence is
+     * AZURE_DISABLE_INSTANCE_DISCOVERY, then enabled. Application code calling
+     * {@link #disableInstanceDiscovery()} always wins, because it runs after this and can only
+     * turn the check off - the environment can never re-enable one an application disabled.
+     */
+    private static boolean resolveInstanceDiscovery(Configuration configuration) {
+        String value = configuration.get(AzureIdentityEnvVars.AZURE_DISABLE_INSTANCE_DISCOVERY.toString());
+        if (value == null || value.trim().isEmpty()) {
+            return true;
+        }
+        String normalized = value.trim().toLowerCase(java.util.Locale.ROOT);
+        if ("true".equals(normalized) || "1".equals(normalized)) {
+            return false;
+        }
+        if ("false".equals(normalized) || "0".equals(normalized)) {
+            return true;
+        }
+        throw new IllegalArgumentException("Invalid value \"" + value + "\" for "
+            + AzureIdentityEnvVars.AZURE_DISABLE_INSTANCE_DISCOVERY + ". Set it to true or false.");
+    }
+
 }
